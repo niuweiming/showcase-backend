@@ -3,32 +3,28 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 const tasksFile = path.join(__dirname, 'data', 'tasks.json');
 
-// 确保 data 目录存在
+// 确保 data 目录和文件存在
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
 }
-
-// 初始化 tasks.json 文件（如果不存在）
 if (!fs.existsSync(tasksFile)) {
     fs.writeFileSync(tasksFile, JSON.stringify({}), 'utf-8');
 }
 
-// 读取任务数据
+// 工具函数
 function readTasks() {
     try {
-        const data = fs.readFileSync(tasksFile, 'utf-8');
-        return JSON.parse(data);
+        return JSON.parse(fs.readFileSync(tasksFile, 'utf-8'));
     } catch (error) {
         console.error('读取任务数据失败:', error);
         return {};
     }
 }
 
-// 保存任务数据
 function saveTasks(tasks) {
     try {
         fs.writeFileSync(tasksFile, JSON.stringify(tasks, null, 2), 'utf-8');
@@ -39,22 +35,9 @@ function saveTasks(tasks) {
     }
 }
 
-function sendJSON(res, statusCode, payload) {
-    res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(payload));
-}
-
-function sendNotFound(res) {
-    res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({
-        success: false,
-        error: 'Not Found'
-    }));
-}
-
-// 处理 API 请求
+// API 处理
 function handleAPI(req, res, pathname) {
-    // 设置 CORS 头部
+    // CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -62,32 +45,32 @@ function handleAPI(req, res, pathname) {
     if (req.method === 'OPTIONS') {
         res.writeHead(200);
         res.end();
-        return;
+        return true;
     }
 
     if (pathname === '/api/tasks' && req.method === 'GET') {
-        // 获取所有任务
         const tasks = readTasks();
-        sendJSON(res, 200, tasks);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(tasks));
         return true;
     }
 
     if (pathname === '/api/tasks' && req.method === 'POST') {
-        // 保存任务
         let body = '';
-        req.on('data', chunk => {
-            body += chunk.toString();
-        });
+        req.on('data', chunk => { body += chunk.toString(); });
         req.on('end', () => {
             try {
                 const tasks = JSON.parse(body);
                 if (saveTasks(tasks)) {
-                    sendJSON(res, 200, { success: true });
+                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: true }));
                 } else {
-                    sendJSON(res, 500, { success: false, error: '保存失败' });
+                    res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, error: '保存失败' }));
                 }
             } catch (error) {
-                sendJSON(res, 400, { success: false, error: '数据格式错误' });
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, error: '数据格式错误' }));
             }
         });
         return true;
@@ -96,24 +79,25 @@ function handleAPI(req, res, pathname) {
     return false;
 }
 
+// HTTP 服务器
 const server = http.createServer((req, res) => {
     const parsedUrl = url.parse(req.url);
-    const pathname = decodeURIComponent(parsedUrl.pathname || '');
+    const pathname = decodeURIComponent(parsedUrl.pathname);
 
     if (pathname.startsWith('/api/')) {
         if (handleAPI(req, res, pathname)) {
             return;
         }
-        sendNotFound(res);
+        res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ success: false, error: '接口不存在' }));
         return;
     }
 
-    // 非 API 请求直接返回 404，交由前端 NGINX 处理静态资源
-    sendNotFound(res);
+    // 非 API 请求交给 Nginx 处理，这里返回 404
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not Found');
 });
 
 server.listen(PORT, () => {
-    console.log('🚀 API 服务已启动！');
-    console.log(`🛠️ 任务接口: http://localhost:${PORT}/api/tasks`);
-    console.log('\n按 Ctrl+C 停止服务器\n');
+    console.log(`🚀 API 服务启动成功: http://localhost:${PORT}`);
 });
