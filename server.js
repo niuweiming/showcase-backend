@@ -75,9 +75,33 @@ function handleAPI(req, res, pathname) {
         });
         return true;
     }
+    if (pathname === '/api/bookmarks' && req.method === 'GET') {
+        const bookmarks = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', 'bookmarks.json'), 'utf-8') || '[]');
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(bookmarks));
+        return true;
+    }
+    
+    if (pathname === '/api/bookmarks' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const bookmarks = JSON.parse(body);
+                fs.writeFileSync(path.join(__dirname, 'data', 'bookmarks.json'), JSON.stringify(bookmarks, null, 2), 'utf-8');
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (error) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, error: '数据格式错误' }));
+            }
+        });
+        return true;
+    }
 
     return false;
 }
+
 
 // HTTP 服务器
 const server = http.createServer((req, res) => {
