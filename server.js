@@ -5,6 +5,7 @@ const url = require('url');
 
 const PORT = process.env.PORT || 3000;
 const tasksFile = path.join(__dirname, 'data', 'tasks.json');
+const dailyRecordsFile = path.join(__dirname, 'data', 'daily-records.json');
 
 // 确保 data 目录和文件存在
 const dataDir = path.join(__dirname, 'data');
@@ -13,6 +14,9 @@ if (!fs.existsSync(dataDir)) {
 }
 if (!fs.existsSync(tasksFile)) {
     fs.writeFileSync(tasksFile, JSON.stringify({}), 'utf-8');
+}
+if (!fs.existsSync(dailyRecordsFile)) {
+    fs.writeFileSync(dailyRecordsFile, JSON.stringify({}), 'utf-8');
 }
 
 // 工具函数
@@ -31,6 +35,25 @@ function saveTasks(tasks) {
         return true;
     } catch (error) {
         console.error('保存任务数据失败:', error);
+        return false;
+    }
+}
+
+function readDailyRecords() {
+    try {
+        return JSON.parse(fs.readFileSync(dailyRecordsFile, 'utf-8'));
+    } catch (error) {
+        console.error('读取成长树记录失败:', error);
+        return {};
+    }
+}
+
+function saveDailyRecords(records) {
+    try {
+        fs.writeFileSync(dailyRecordsFile, JSON.stringify(records, null, 2), 'utf-8');
+        return true;
+    } catch (error) {
+        console.error('保存成长树记录失败:', error);
         return false;
     }
 }
@@ -91,6 +114,34 @@ function handleAPI(req, res, pathname) {
                 fs.writeFileSync(path.join(__dirname, 'data', 'bookmarks.json'), JSON.stringify(bookmarks, null, 2), 'utf-8');
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ success: true }));
+            } catch (error) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
+                res.end(JSON.stringify({ success: false, error: '数据格式错误' }));
+            }
+        });
+        return true;
+    }
+
+    if (pathname === '/api/daily-records' && req.method === 'GET') {
+        const records = readDailyRecords();
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(records));
+        return true;
+    }
+
+    if (pathname === '/api/daily-records' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const records = JSON.parse(body);
+                if (saveDailyRecords(records)) {
+                    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: true }));
+                } else {
+                    res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+                    res.end(JSON.stringify({ success: false, error: '保存失败' }));
+                }
             } catch (error) {
                 res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
                 res.end(JSON.stringify({ success: false, error: '数据格式错误' }));
